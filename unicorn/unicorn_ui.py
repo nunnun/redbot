@@ -18,9 +18,8 @@ from cgi import escape as e
 import re
 import cgi
 import logging
-import urllib
-import nbhttp
 from string import Template
+import nbhttp
 
 __date__ = "Jun 30, 2010"
 __author__ = "Hirotaka Nakajima <hiro@w3.org>"
@@ -42,17 +41,26 @@ class UnicornUi(object):
             self.groups = []
             logger = logging.getLogger()
             logger.setLevel(logging.DEBUG)
-            if self.red.res_complete:
+#            self.formatter = find_formatter('txt', 'txt', False)(
+#                self.test_uri, self.test_uri, [], 'en', None
+#            )
+#            self.formatter.set_red(self.red.state)
+#            self.formatter.start_output()
+
+            self.red.run(self.done)
+            nbhttp.run()
+            
+            if self.red.state.res_complete:
                 self.result = self._generate_output_xml(test_uri).toprettyxml()
             else:
                 error_string = ""
-                if self.red.res_error['desc'] == nbhttp.error.ERR_CONNECT['desc']:
+                if self.red.state.res_error['desc'] == nbhttp.error.ERR_CONNECT['desc']:
                     error_string = "Could not connect to the server (%s)" % self.red.res_error.get('detail', "unknown")
-                elif self.red.res_error['desc'] == nbhttp.error.ERR_URL['desc']:
+                elif self.red.state.res_error['desc'] == nbhttp.error.ERR_URL['desc']:
                     error_string = self.red.res_error.get('detail', "RED can't fetch that URL.")
-                elif self.red.res_error['desc'] == nbhttp.error.ERR_READ_TIMEOUT['desc']:
+                elif self.red.state.res_error['desc'] == nbhttp.error.ERR_READ_TIMEOUT['desc']:
                     error_string = self.red.res_error['desc']
-                elif self.red.res_error['desc'] == nbhttp.error.ERR_HTTP_VERSION['desc']:
+                elif self.red.state.res_error['desc'] == nbhttp.error.ERR_HTTP_VERSION['desc']:
                     error_string = "<code>%s</code> isn't HTTP." % e(self.red.res_error.get('detail', '')[:20])
                 else:
                     raise AssertionError, "Unidentified incomplete response error."
@@ -71,6 +79,10 @@ class UnicornUi(object):
         </description>
     </message>
 </observationresponse>"""
+
+    def done(self):
+#        self.formatter.finish_output()
+        nbhttp.stop()
         
     def get_result(self):
         """
@@ -106,7 +118,7 @@ class UnicornUi(object):
         ul = doc.createElement("ul")
         ul.setAttribute("class", "headers")
         description.appendChild(ul)
-        for i in self.red.res_hdrs:
+        for i in self.red.state.res_hdrs:
             li = doc.createElement("li")
             li.appendChild(doc.createTextNode(i[0] + ":" + i[1]))
             ul.appendChild(li)
@@ -150,7 +162,7 @@ class UnicornUi(object):
         @return: Output XML Document
         """
         rootDoc, doc = self._get_response_document()
-        for i in self.red.messages:
+        for i in self.red.state.messages:
             m = doc.createElement("message")
             m.setAttribute("type", self._convert_level(i.level))
 
@@ -215,7 +227,6 @@ class UnicornUi(object):
         string = re.sub("<br/>", "<br />", string)
         string = re.sub("<br>", "<br />", string)
         return string
-        
 
 def application(environ, start_response):
     method = environ.get('REQUEST_METHOD')
